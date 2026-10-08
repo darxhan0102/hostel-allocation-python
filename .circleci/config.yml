@@ -1,0 +1,81 @@
+version: 2.1
+
+executors:
+  py:
+    docker:
+      - image: cimg/python:3.12
+
+  py-with-services:
+    docker:
+      - image: cimg/python:3.12
+        environment:
+          DATABASE_URL: postgresql://hostel:hostel@localhost:5432/hostel
+          REDIS_URL: redis://localhost:6379/0
+      - image: cimg/postgres:16.4
+        environment:
+          POSTGRES_USER: hostel
+          POSTGRES_PASSWORD: hostel
+          POSTGRES_DB: hostel
+      - image: cimg/redis:7.2
+
+jobs:
+  lint:
+    executor: py
+    steps:
+      - checkout
+      - run: pip install ruff
+      - run: ruff check .
+
+  unit-tests:
+    executor: py
+    steps:
+      - checkout
+      - run: pip install -r requirements.txt pytest pytest-cov
+      - run: pytest tests/unit --cov=app --cov-report=term-missing --cov-fail-under=70
+
+  integration-tests:
+    executor: py-with-services
+    steps:
+      - checkout
+      - run: pip install -r requirements.txt pytest httpx
+      - run:
+          name: Install psql client
+          command: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - run:
+          name: Wait for Postgres
+          command: dockerize -wait tcp://localhost:5432 -wait tcp://localhost:6379 -timeout 60s
+      - run:
+          name: Apply migrations
+          command: |
+            for f in $(ls migrations/*.sql | sort); do
+              psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+            done
+      - run: pytest tests/integration
+
+  secret-scan:
+    docker:
+      - image: zricethezav/gitleaks:v8.18.4
+    steps:
+      - checkout
+      - run: gitleaks detect --source . --verbose
+
+  build-image:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run: docker build -t hostel-allocation:1.0 .
+
+workflows:
+  ci:
+    jobs:
+      - lint
+      - unit-tests:
+          requires: [lint]
+      - integration-tests:
+          requires: [unit-tests]
+      - secret-scan:
+          requires: [integration-tests]
+      - build-image:
+          requires: [secret-scan]

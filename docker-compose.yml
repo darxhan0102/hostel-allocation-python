@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16.4
+    environment:
+      POSTGRES_USER: hostel
+      POSTGRES_PASSWORD: hostel
+      POSTGRES_DB: hostel
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hostel -d hostel"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  redis:
+    image: redis:7.4
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  migrate:
+    image: postgres:16.4
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://hostel:hostel@postgres:5432/hostel
+    volumes:
+      - ./migrations:/migrations:ro
+    command: >
+      sh -c 'for f in $$(ls /migrations/*.sql | sort); do
+      echo "applying $$f"; psql "$$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$$f" || exit 1; done'
+
+  app:
+    build: .
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://hostel:hostel@postgres:5432/hostel
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8080:8080"
