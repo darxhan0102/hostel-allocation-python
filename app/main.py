@@ -1,7 +1,8 @@
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import BackgroundTasks, Body, FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from . import cache, db
 from .allocate import (
@@ -15,7 +16,15 @@ from .allocate import (
 
 app = FastAPI(title="hostel-allocation")
 
+STATIC_INDEX = Path(__file__).parent / "static" / "index.html"
 RUN_TTL = 3600
+
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    if STATIC_INDEX.exists():
+        return HTMLResponse(STATIC_INDEX.read_text(encoding="utf-8"))
+    return HTMLResponse("<h1>Hostel Room Allocation Engine</h1>")
 
 
 @app.get("/health")
