@@ -65,7 +65,22 @@ jobs:
     steps:
       - checkout
       - setup_remote_docker
-      - run: docker build -t hostel-allocation:1.0 .
+      - run:
+          name: Build Docker image
+          command: docker build -t hostel-allocation:1.0 .
+      - run:
+          name: Push to Docker Hub
+          command: |
+            if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_PASSWORD" ]; then
+              echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+              docker tag hostel-allocation:1.0 "$DOCKERHUB_USERNAME/hostel-allocation:1.0"
+              docker tag hostel-allocation:1.0 "$DOCKERHUB_USERNAME/hostel-allocation:latest"
+              docker push "$DOCKERHUB_USERNAME/hostel-allocation:1.0"
+              docker push "$DOCKERHUB_USERNAME/hostel-allocation:latest"
+              echo "Pushed to Docker Hub as $DOCKERHUB_USERNAME/hostel-allocation:1.0 and :latest"
+            else
+              echo "DOCKERHUB_USERNAME or DOCKERHUB_PASSWORD not configured; skipping push."
+            fi
 
 workflows:
   ci:
