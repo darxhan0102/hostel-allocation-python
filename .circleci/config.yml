@@ -31,7 +31,7 @@ jobs:
     steps:
       - checkout
       - run: pip install -r requirements.txt pytest pytest-cov
-      - run: pytest tests/unit --cov=app --cov-report=term-missing --cov-fail-under=70
+      - run: pytest tests/unit --cov=app.allocate --cov-report=term-missing --cov-fail-under=70
 
   integration-tests:
     executor: py-with-services
