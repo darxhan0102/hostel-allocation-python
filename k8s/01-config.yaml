@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hostel-config
+data:
+  POSTGRES_DB: hostel
+  POSTGRES_USER: hostel
+  REDIS_URL: redis://redis:6379/0

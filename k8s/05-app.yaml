@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hostel-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hostel-api
+  template:
+    metadata:
+      labels:
+        app: hostel-api
+    spec:
+      containers:
+        - name: api
+          image: darshan0369/hostel-allocation-python:qa
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: hostel-db-secret
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: hostel-config
+                  key: REDIS_URL
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hostel-api
+spec:
+  type: NodePort
+  selector:
+    app: hostel-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080

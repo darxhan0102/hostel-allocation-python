@@ -1,0 +1,165 @@
+
+version: 2.1
+
+jobs:
+  test:
+    docker:
+      - image: cimg/python:3.12
+        environment:
+          DATABASE_URL: postgresql://hostel:hostel_dev_password@127.0.0.1:5432/hostel
+          REDIS_URL: redis://127.0.0.1:6379/0
+
+      - image: cimg/postgres:16.4
+        environment:
+          POSTGRES_DB: hostel
+          POSTGRES_USER: hostel
+          POSTGRES_PASSWORD: hostel_dev_password
+
+      - image: cimg/redis:7.2
+
+    steps:
+      - checkout
+
+      - run:
+          name: Install system tools
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client redis-tools curl
+
+      - run:
+          name: Wait for PostgreSQL and Redis
+          command: |
+            set -e
+
+            for i in $(seq 1 30); do
+              if pg_isready -h 127.0.0.1 -U hostel -d hostel; then
+                break
+              fi
+              sleep 2
+            done
+
+            pg_isready -h 127.0.0.1 -U hostel -d hostel
+
+            for i in $(seq 1 30); do
+              if redis-cli -h 127.0.0.1 ping | grep -q PONG; then
+                break
+              fi
+              sleep 2
+            done
+
+            redis-cli -h 127.0.0.1 ping | grep -q PONG
+
+      - run:
+          name: Apply database migrations
+          command: |
+            set -e
+            export PGPASSWORD=hostel_dev_password
+
+            for f in migrations/*.sql; do
+              echo "Applying $f"
+              psql -v ON_ERROR_STOP=1 \
+                -h 127.0.0.1 \
+                -U hostel \
+                -d hostel \
+                -f "$f"
+            done
+
+      - run:
+          name: Install Python dependencies
+          command: |
+            python -m pip install --upgrade pip
+            python -m pip install -r requirements.txt
+            python -m pip install pytest==8.3.5 ruff==0.17.0 httpx
+
+      - run:
+          name: Secret scan
+          command: |
+            set -e
+
+            curl -sSfL -o /tmp/gitleaks.tar.gz \
+              https://github.com/gitleaks/gitleaks/releases/download/v8.24.2/gitleaks_8.24.2_linux_x64.tar.gz
+
+            tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+
+            /tmp/gitleaks detect \
+              --source . \
+              --no-git \
+              --redact \
+              --exit-code 1
+
+      - run:
+          name: Lint
+          command: python -m ruff check .
+
+      - run:
+          name: Start API server
+          command: |
+            nohup uvicorn app.main:app \
+              --host 0.0.0.0 \
+              --port 8080 \
+              > /tmp/hostel-api.log 2>&1 &
+
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8080/health; then
+                exit 0
+              fi
+              sleep 2
+            done
+
+            cat /tmp/hostel-api.log
+            exit 1
+
+      - run:
+          name: Unit and API integration tests
+          command: python -m pytest -v
+
+  build-image:
+    docker:
+      - image: cimg/base:current
+
+    steps:
+      - checkout
+
+      - setup_remote_docker
+
+      - run:
+          name: Verify Docker Hub credentials
+          command: |
+            test -n "$DOCKERHUB_USERNAME"
+            test -n "$DOCKERHUB_TOKEN"
+
+      - run:
+          name: Login to Docker Hub
+          command: |
+            echo "$DOCKERHUB_TOKEN" | docker login \
+              --username "$DOCKERHUB_USERNAME" \
+              --password-stdin
+
+      - run:
+          name: Build and push QA image
+          command: |
+            set -e
+
+            IMAGE="$DOCKERHUB_USERNAME/hostel-allocation-python"
+            TAG="${CIRCLE_SHA1:0:7}"
+
+            docker build \
+              -t "$IMAGE:qa" \
+              -t "$IMAGE:qa-$TAG" \
+              .
+
+            docker push "$IMAGE:qa"
+            docker push "$IMAGE:qa-$TAG"
+
+workflows:
+  hostel-pipeline:
+    jobs:
+      - test
+
+      - build-image:
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - main
