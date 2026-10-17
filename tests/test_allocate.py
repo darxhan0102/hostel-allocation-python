@@ -139,3 +139,12 @@ def test_allocation_progress_is_monotonic_and_finishes():
     assert done_values == sorted(done_values)
     assert progress[-1][0] == progress[-1][1] == 5
     assert progress[-1][2] == "done"
+def test_mutual_pairs_ignores_self_duplicates_and_requests_over_limit():
+    students = [
+        {"id": 1, "wants": [1, 2, 2, 3, 4]},
+        {"id": 2, "wants": [1]},
+        {"id": 3, "wants": [1]},
+        {"id": 4, "wants": [1]},
+    ]
+
+    assert mutual_pairs(students) == [(1, 2), (1, 3)]
