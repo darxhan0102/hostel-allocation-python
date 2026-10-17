@@ -258,17 +258,9 @@ workflows:
             branches:
               only: main
 
-      - approve-production:
-          type: approval
-          requires:
-            - promote-staging
-          filters:
-            branches:
-              only: main
-
       - promote-production:
           requires:
-            - approve-production
+            - promote-staging
           filters:
             branches:
               only: main
