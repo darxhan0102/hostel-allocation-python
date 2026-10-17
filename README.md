@@ -112,3 +112,18 @@ Write your answer in your README. It is worth more marks than the feature.
 Demo note: The application is tested with CircleCI and can run with Docker Compose and Kubernetes.
 
 Presentation verified on 2026-10-17.
+
+## Presentation Verification
+
+### Docker
+Start the application with `docker compose up --build`.
+Verify `http://localhost:8080/health`.
+
+### Kubernetes
+Check the cluster with `kubectl get nodes -o wide` and `kubectl get pods -A`.
+
+### CircleCI
+Show a successful pipeline and its test, image-build, staging-promotion, and production-promotion jobs when present.
+
+### GitHub Workflow
+Develop changes on `feature`, review them in a pull request, and merge approved changes into `main`.
