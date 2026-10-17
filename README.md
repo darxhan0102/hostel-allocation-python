@@ -110,3 +110,5 @@ Write your answer in your README. It is worth more marks than the feature.
 | CI cannot reach the database | In CircleCI service containers the host **is** `localhost` — opposite of compose. |
 
 Demo note: The application is tested with CircleCI and can run with Docker Compose and Kubernetes.
+
+Presentation verified on 2026-10-17.
